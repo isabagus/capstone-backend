@@ -7,7 +7,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Warehouse extends Model
 {
-    protected $fillable = ['name', 'address', 'type'];
+    protected $fillable = [
+        'code',
+        'name',
+        'short_name',
+        'address',
+        'phone',
+        'pic_name',
+        'type',
+        'description',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     /**
      * @return HasMany<WarehouseStock, $this>

@@ -34,10 +34,26 @@ class SupplierController extends Controller
 
         $suppliers = $query->orderBy('name', 'asc')->get();
 
+        $data = $suppliers->map(function ($s) {
+            return [
+                'id'        => (string) $s->id,
+                'name'      => $s->name,
+                'code'      => $s->code,
+                'phone'     => $s->phone ?? '',
+                'email'     => $s->email ?? '',
+                'address'   => $s->address ?? '',
+                'active'    => (bool) $s->is_active,
+                'is_active' => (bool) $s->is_active,
+                'materials' => [],
+                'created_at'=> $s->created_at?->toIso8601String(),
+                'updated_at'=> $s->updated_at?->toIso8601String(),
+            ];
+        });
+
         return response()->json([
             'success' => true,
             'message' => 'Daftar supplier berhasil diambil',
-            'data'    => $suppliers,
+            'data'    => $data,
             'meta'    => [
                 'total' => $suppliers->count(),
             ],
@@ -56,8 +72,11 @@ class SupplierController extends Controller
             'phone'     => ['nullable', 'string', 'max:20'],
             'email'     => ['nullable', 'email', 'max:100'],
             'address'   => ['nullable', 'string'],
+            'active'    => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+
+        $isActive = $validated['active'] ?? ($validated['is_active'] ?? true);
 
         $supplier = Supplier::create([
             'name'      => trim($validated['name']),
@@ -65,7 +84,7 @@ class SupplierController extends Controller
             'phone'     => isset($validated['phone']) ? trim($validated['phone']) : null,
             'email'     => isset($validated['email']) ? trim($validated['email']) : null,
             'address'   => isset($validated['address']) ? trim($validated['address']) : null,
-            'is_active' => $validated['is_active'] ?? true,
+            'is_active' => $isActive,
         ]);
 
         return response()->json([
@@ -118,22 +137,34 @@ class SupplierController extends Controller
             'phone'     => ['nullable', 'string', 'max:20'],
             'email'     => ['nullable', 'email', 'max:100'],
             'address'   => ['nullable', 'string'],
+            'active'    => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $supplier->update([
-            'name'      => isset($validated['name']) ? trim($validated['name']) : $supplier->name,
-            'code'      => isset($validated['code']) ? strtoupper(trim($validated['code'])) : $supplier->code,
-            'phone'     => array_key_exists('phone', $validated) ? trim($validated['phone']) : $supplier->phone,
-            'email'     => array_key_exists('email', $validated) ? trim($validated['email']) : $supplier->email,
-            'address'   => array_key_exists('address', $validated) ? trim($validated['address']) : $supplier->address,
-            'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : $supplier->is_active,
-        ]);
+        $updateData = [];
+        if (isset($validated['name'])) $updateData['name'] = trim($validated['name']);
+        if (isset($validated['code'])) $updateData['code'] = strtoupper(trim($validated['code']));
+        if (array_key_exists('phone', $validated)) $updateData['phone'] = trim($validated['phone']) ?: null;
+        if (array_key_exists('email', $validated)) $updateData['email'] = trim($validated['email']) ?: null;
+        if (array_key_exists('address', $validated)) $updateData['address'] = trim($validated['address']) ?: null;
+        if (array_key_exists('active', $validated)) $updateData['is_active'] = (bool) $validated['active'];
+        elseif (array_key_exists('is_active', $validated)) $updateData['is_active'] = (bool) $validated['is_active'];
+
+        $supplier->update($updateData);
 
         return response()->json([
             'success' => true,
             'message' => 'Data supplier berhasil diperbarui',
-            'data'    => $supplier,
+            'data'    => [
+                'id'        => (string) $supplier->id,
+                'name'      => $supplier->name,
+                'code'      => $supplier->code,
+                'phone'     => $supplier->phone ?? '',
+                'email'     => $supplier->email ?? '',
+                'address'   => $supplier->address ?? '',
+                'active'    => (bool) $supplier->is_active,
+                'is_active' => (bool) $supplier->is_active,
+            ],
         ]);
     }
 

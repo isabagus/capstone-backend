@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Brand extends Model
 {
-    protected $fillable = ['name', 'code', 'slug'];
+    protected $fillable = ['name', 'code', 'slug', 'description', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     /**
      * @return BelongsToMany<Material, $this>

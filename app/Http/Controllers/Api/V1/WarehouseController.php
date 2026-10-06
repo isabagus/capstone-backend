@@ -28,12 +28,22 @@ class WarehouseController extends Controller
         $data = $warehouses->map(function ($wh) {
             $totalUnits = (float) $wh->stocks()->sum('qty_available');
             return [
-                'id'          => $wh->id,
+                'id'          => (string) $wh->id,
+                'code'        => $wh->code ?? 'WH-' . $wh->id,
                 'name'        => $wh->name,
+                'shortName'   => $wh->short_name ?? $wh->name,
+                'short_name'  => $wh->short_name ?? $wh->name,
                 'address'     => $wh->address,
+                'phone'       => $wh->phone,
+                'picName'     => $wh->pic_name,
+                'pic_name'    => $wh->pic_name,
                 'type'        => $wh->type,
-                'total_skus'  => $wh->total_skus,
+                'description' => $wh->description,
+                'active'      => (bool) ($wh->is_active ?? true),
+                'total_skus'  => $wh->total_skus ?? 0,
+                'totalSku'    => $wh->total_skus ?? 0,
                 'total_units' => $totalUnits,
+                'totalStock'  => $totalUnits,
                 'created_at'  => $wh->created_at?->toIso8601String(),
                 'updated_at'  => $wh->updated_at?->toIso8601String(),
             ];
@@ -53,16 +63,35 @@ class WarehouseController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name'    => ['required', 'string', 'max:100', 'unique:warehouses,name'],
-            'address' => ['nullable', 'string'],
-            'type'    => ['required', 'string', Rule::in(['MAIN_WAREHOUSE', 'STORE_WAREHOUSE'])],
+            'name'        => ['required', 'string', 'max:100', 'unique:warehouses,name'],
+            'code'        => ['nullable', 'string', 'max:20', 'unique:warehouses,code'],
+            'short_name'  => ['nullable', 'string', 'max:50'],
+            'shortName'   => ['nullable', 'string', 'max:50'],
+            'address'     => ['nullable', 'string'],
+            'phone'       => ['nullable', 'string', 'max:30'],
+            'pic_name'    => ['nullable', 'string', 'max:100'],
+            'picName'     => ['nullable', 'string', 'max:100'],
+            'type'        => ['required', 'string'],
+            'description' => ['nullable', 'string'],
+            'active'      => ['nullable', 'boolean'],
+            'is_active'   => ['nullable', 'boolean'],
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        $shortName = $validated['shortName'] ?? ($validated['short_name'] ?? null);
+        $picName   = $validated['picName'] ?? ($validated['pic_name'] ?? null);
+        $isActive  = $validated['active'] ?? ($validated['is_active'] ?? true);
+
+        return DB::transaction(function () use ($validated, $shortName, $picName, $isActive) {
             $warehouse = Warehouse::create([
-                'name'    => trim($validated['name']),
-                'address' => isset($validated['address']) ? trim($validated['address']) : null,
-                'type'    => $validated['type'],
+                'name'        => trim($validated['name']),
+                'code'        => !empty($validated['code']) ? strtoupper(trim($validated['code'])) : null,
+                'short_name'  => $shortName ? trim($shortName) : null,
+                'address'     => isset($validated['address']) ? trim($validated['address']) : null,
+                'phone'       => isset($validated['phone']) ? trim($validated['phone']) : null,
+                'pic_name'    => $picName ? trim($picName) : null,
+                'type'        => $validated['type'],
+                'description' => isset($validated['description']) ? trim($validated['description']) : null,
+                'is_active'   => $isActive,
             ]);
 
             // Buat record stok 0 untuk seluruh material yang ada saat ini
@@ -126,16 +155,35 @@ class WarehouseController extends Controller
         }
 
         $validated = $request->validate([
-            'name'    => ['sometimes', 'required', 'string', 'max:100', Rule::unique('warehouses', 'name')->ignore($warehouse->id)],
-            'address' => ['nullable', 'string'],
-            'type'    => ['sometimes', 'required', 'string', Rule::in(['MAIN_WAREHOUSE', 'STORE_WAREHOUSE'])],
+            'name'        => ['sometimes', 'required', 'string', 'max:100', Rule::unique('warehouses', 'name')->ignore($warehouse->id)],
+            'code'        => ['sometimes', 'nullable', 'string', 'max:20', Rule::unique('warehouses', 'code')->ignore($warehouse->id)],
+            'short_name'  => ['sometimes', 'nullable', 'string', 'max:50'],
+            'shortName'   => ['sometimes', 'nullable', 'string', 'max:50'],
+            'address'     => ['nullable', 'string'],
+            'phone'       => ['nullable', 'string', 'max:30'],
+            'pic_name'    => ['nullable', 'string', 'max:100'],
+            'picName'     => ['nullable', 'string', 'max:100'],
+            'type'        => ['sometimes', 'required', 'string'],
+            'description' => ['nullable', 'string'],
+            'active'      => ['sometimes', 'nullable', 'boolean'],
+            'is_active'   => ['sometimes', 'nullable', 'boolean'],
         ]);
 
-        $warehouse->update([
-            'name'    => isset($validated['name']) ? trim($validated['name']) : $warehouse->name,
-            'address' => array_key_exists('address', $validated) ? trim($validated['address']) : $warehouse->address,
-            'type'    => $validated['type'] ?? $warehouse->type,
-        ]);
+        $updateData = [];
+        if (isset($validated['name'])) $updateData['name'] = trim($validated['name']);
+        if (array_key_exists('code', $validated)) $updateData['code'] = $validated['code'] ? strtoupper(trim($validated['code'])) : null;
+        if (isset($validated['shortName'])) $updateData['short_name'] = trim($validated['shortName']);
+        elseif (isset($validated['short_name'])) $updateData['short_name'] = trim($validated['short_name']);
+        if (array_key_exists('address', $validated)) $updateData['address'] = $validated['address'] ? trim($validated['address']) : null;
+        if (array_key_exists('phone', $validated)) $updateData['phone'] = $validated['phone'] ? trim($validated['phone']) : null;
+        if (isset($validated['picName'])) $updateData['pic_name'] = trim($validated['picName']);
+        elseif (isset($validated['pic_name'])) $updateData['pic_name'] = trim($validated['pic_name']);
+        if (isset($validated['type'])) $updateData['type'] = $validated['type'];
+        if (array_key_exists('description', $validated)) $updateData['description'] = $validated['description'] ? trim($validated['description']) : null;
+        if (array_key_exists('active', $validated)) $updateData['is_active'] = (bool) $validated['active'];
+        elseif (array_key_exists('is_active', $validated)) $updateData['is_active'] = (bool) $validated['is_active'];
+
+        $warehouse->update($updateData);
 
         return response()->json([
             'success' => true,

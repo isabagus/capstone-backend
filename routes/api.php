@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\MaterialController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\UnitController;
+use App\Http\Controllers\Api\V1\UnitConversionController;
 use App\Http\Controllers\Api\V1\WarehouseController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +50,12 @@ $registerMasterRoutes = function () {
 
     // Suppliers CRUD
     Route::apiResource('suppliers', SupplierController::class);
+
+    // Units CRUD
+    Route::apiResource('units', UnitController::class);
+
+    // Unit Conversions CRUD
+    Route::apiResource('unit-conversions', UnitConversionController::class);
 };
 
 // 1. Versioned Routes: /api/v1/...
