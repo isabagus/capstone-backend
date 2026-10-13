@@ -3,10 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\StockOpname;
-use App\Models\WarehouseStock;
-use App\Services\InventoryService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StockOpnameController extends Controller

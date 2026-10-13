@@ -49,16 +49,43 @@ class AuthController extends Controller
             'revoked' => false,
         ]);
 
+        $rawRoleSlug = $user->role?->slug ?? '';
+        $normalizedRole = str_replace('-', '_', strtolower($rawRoleSlug));
+        $roleDisplayName = $user->role?->name ?? ucfirst(str_replace('_', ' ', $normalizedRole));
+
+        // Format permissions
+        $dbPermissions = $user->role?->permissions->pluck('slug')->toArray() ?? [];
+        $permissions = [];
+        foreach ($dbPermissions as $p) {
+            $permissions[] = $p;
+            $permissions[] = str_replace(':', '.', $p);
+            if (str_contains($p, ':read')) {
+                $permissions[] = str_replace(':read', '.view', $p);
+            }
+        }
+        if (in_array($normalizedRole, ['owner', 'manager'])) {
+            $permissions = array_values(array_unique(array_merge($permissions, [
+                'inventory.view', 'inventory.create', 'inventory.transfer', 'inventory.opname',
+                'order.view', 'order.create', 'order.approve',
+                'bom.view', 'bom.calculate', 'spk.view', 'spk.issue',
+                'production.view', 'production.update', 'qc.view', 'qc.inspect',
+                'usd.view', 'invoice.view', 'report.view', 'audit.view', 'user.view',
+            ])));
+        }
+
         return response()->json([
-            'access_token' => $accessToken,
+            'success'       => true,
+            'token'         => $accessToken,
+            'access_token'  => $accessToken,
             'refresh_token' => $rawRefreshToken,
-            'token_type' => 'Bearer',
+            'token_type'    => 'Bearer',
             'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role?->name,
-                'permissions' => $user->role?->permissions->pluck('slug'),
+                'id'           => $user->id,
+                'name'         => $user->name,
+                'email'        => $user->email,
+                'role'         => $normalizedRole,
+                'role_display' => $roleDisplayName,
+                'permissions'  => array_values(array_unique($permissions)),
             ],
         ]);
     }
@@ -121,13 +148,37 @@ class AuthController extends Controller
     {
         $user = $request->user()->load('role.permissions');
 
+        $rawRoleSlug = $user->role?->slug ?? '';
+        $normalizedRole = str_replace('-', '_', strtolower($rawRoleSlug));
+        $roleDisplayName = $user->role?->name ?? ucfirst(str_replace('_', ' ', $normalizedRole));
+
+        $dbPermissions = $user->role?->permissions->pluck('slug')->toArray() ?? [];
+        $permissions = [];
+        foreach ($dbPermissions as $p) {
+            $permissions[] = $p;
+            $permissions[] = str_replace(':', '.', $p);
+            if (str_contains($p, ':read')) {
+                $permissions[] = str_replace(':read', '.view', $p);
+            }
+        }
+        if (in_array($normalizedRole, ['owner', 'manager'])) {
+            $permissions = array_values(array_unique(array_merge($permissions, [
+                'inventory.view', 'inventory.create', 'inventory.transfer', 'inventory.opname',
+                'order.view', 'order.create', 'order.approve',
+                'bom.view', 'bom.calculate', 'spk.view', 'spk.issue',
+                'production.view', 'production.update', 'qc.view', 'qc.inspect',
+                'usd.view', 'invoice.view', 'report.view', 'audit.view', 'user.view',
+            ])));
+        }
+
         return response()->json([
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role?->name,
-            'permissions' => $user->role?->permissions->pluck('slug'),
-            'is_active' => $user->is_active,
+            'id'           => $user->id,
+            'name'         => $user->name,
+            'email'        => $user->email,
+            'role'         => $normalizedRole,
+            'role_display' => $roleDisplayName,
+            'permissions'  => array_values(array_unique($permissions)),
+            'is_active'    => $user->is_active,
         ]);
     }
 }

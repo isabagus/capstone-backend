@@ -43,50 +43,5 @@ class PermissionSeeder extends Seeder
         if ($manager) {
             $manager->permissions()->sync($allPermissions->pluck('id'));
         }
-
-        // Staf Gudang — inventory operations
-        $staffGudang = Role::where('slug', 'staf-gudang')->first();
-        if ($staffGudang) {
-            $staffGudang->permissions()->sync(
-                Permission::whereIn('slug', ['inventory:read', 'inventory:create', 'inventory:transfer', 'inventory:opname'])
-                    ->pluck('id')
-            );
-        }
-
-        // Front Office — order operations
-        $frontOffice = Role::where('slug', 'front-office')->first();
-        if ($frontOffice) {
-            $frontOffice->permissions()->sync(
-                Permission::whereIn('slug', ['inventory:read', 'order:create'])
-                    ->pluck('id')
-            );
-        }
-
-        // Tim Design — BOM & order view
-        $timDesign = Role::where('slug', 'tim-design')->first();
-        if ($timDesign) {
-            $timDesign->permissions()->sync(
-                Permission::whereIn('slug', ['inventory:read', 'order:create', 'bom:calculate'])
-                    ->pluck('id')
-            );
-        }
-
-        // Kepala Produksi — SPK & production
-        $kepalaProduksi = Role::where('slug', 'kepala-produksi')->first();
-        if ($kepalaProduksi) {
-            $kepalaProduksi->permissions()->sync(
-                Permission::whereIn('slug', ['inventory:read', 'spk:issue', 'production:update'])
-                    ->pluck('id')
-            );
-        }
-
-        // Quality Control — QC inspect
-        $qc = Role::where('slug', 'quality-control')->first();
-        if ($qc) {
-            $qc->permissions()->sync(
-                Permission::whereIn('slug', ['inventory:read', 'qc:inspect'])
-                    ->pluck('id')
-            );
-        }
     }
 }

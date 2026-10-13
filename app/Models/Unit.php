@@ -7,17 +7,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Unit extends Model
 {
-    protected $fillable = [
-        'name',
-        'code',
-        'description',
+    protected $fillable = ['name', 'abbr', 'type', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     /**
-     * @return HasMany<Material, $this>
+     * @return HasMany<UnitConversion, $this>
      */
-    public function materials(): HasMany
+    public function conversionsFrom(): HasMany
     {
-        return $this->hasMany(Material::class);
+        return $this->hasMany(UnitConversion::class, 'from_unit_id');
+    }
+
+    /**
+     * @return HasMany<UnitConversion, $this>
+     */
+    public function conversionsTo(): HasMany
+    {
+        return $this->hasMany(UnitConversion::class, 'to_unit_id');
     }
 }

@@ -17,6 +17,8 @@ class Role extends Model
     protected $fillable = [
         'name',
         'slug',
+        'display_name',
+        'description',
     ];
 
     /**
@@ -33,5 +35,15 @@ class Role extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'role_has_permissions');
+    }
+
+    /**
+     * Cek apakah role ini memiliki permission tertentu.
+     */
+    public function hasPermission(string $permission): bool
+    {
+        return $this->permissions->contains(function ($p) use ($permission) {
+            return ($p->slug ?? null) === $permission || ($p->name ?? null) === $permission;
+        });
     }
 }

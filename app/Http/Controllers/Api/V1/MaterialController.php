@@ -3,229 +3,289 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\Api\V1\MaterialCollection;
-use App\Http\Resources\Api\V1\MaterialResource;
 use App\Models\Material;
+use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class MaterialController extends Controller
 {
     /**
-     * The relations to eager-load on every material fetch.
-     * Keeping this in one place avoids N+1 on all actions.
+     * Display a listing of materials with stock levels and ROP indicators.
+     * GET /api/v1/materials or /api/materials
      */
-    private const WITH = ['category', 'unitRelation', 'brands', 'warehouseStocks.warehouse', 'supplier', 'batchLots'];
-
-    /**
-     * List materials with filters.
-     *
-     * Query parameters:
-     *   item_type   – 'material' | 'product' | 'sparepart'  (default: all)
-     *   category_id – integer ID
-     *   brand_id    – integer ID (filters via pivot)
-     *   warehouse_id – integer ID (only items with stock in that warehouse)
-     *   search      – searches sku and name (ILIKE)
-     *   low_stock   – '1' to return only items ≤ reorder_point
-     *   per_page    – integer (default 50, max 200)
-     */
-    public function index(Request $request): MaterialCollection
+    public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) ($request->per_page ?? 50), 200);
+        $query = Material::with([
+            'category:id,name',
+            'brands:id,name,code,slug',
+            'warehouseStocks.warehouse:id,name,type',
+        ]);
 
-        $query = Material::with(self::WITH)
-            ->when($request->item_type, fn ($q) => $q->where('item_type', $request->item_type))
-            ->when($request->category_id, fn ($q) => $q->where('category_id', $request->category_id))
-            ->when($request->supplier_id, fn ($q) => $q->where('supplier_id', $request->supplier_id))
-            ->when(
-                $request->brand_id,
-                fn ($q) => $q->whereHas('brands', fn ($b) => $b->where('brands.id', $request->brand_id))
-            )
-            ->when(
-                $request->warehouse_id,
-                fn ($q) => $q->whereHas(
-                    'warehouseStocks',
-                    fn ($ws) => $ws->where('warehouse_id', $request->warehouse_id)->where('qty_available', '>', 0)
-                )
-            )
-            ->when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
-                $q->where('name', 'ilike', "%{$request->search}%")
-                    ->orWhere('sku', 'ilike', "%{$request->search}%");
-            }))
-            ->when($request->low_stock, function ($q) {
-                // Only items where total available stock ≤ reorder_point
-                $q->whereHas(
-                    'warehouseStocks',
-                    fn ($ws) => $ws->whereColumn('qty_available', '<=', 'materials.reorder_point')
-                );
+        // Filter search SKU or Name
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('sku', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by Category
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->input('category_id'));
+        }
+
+        // Filter by Brand
+        if ($request->filled('brand_id')) {
+            $brandId = $request->input('brand_id');
+            $query->whereHas('brands', function ($q) use ($brandId) {
+                $q->where('brands.id', $brandId);
+            });
+        }
+
+        $materials = $query->orderBy('name', 'asc')->get();
+
+        // Transform with calculated fields (total stock, stock per warehouse, ROP status)
+        $data = $materials->map(function ($material) use ($request) {
+            $stocks = $material->warehouseStocks;
+            $totalAvailable = (float) $stocks->sum('qty_available');
+            $totalReserved = (float) $stocks->sum('qty_reserved');
+
+            $warehouseBreakdown = $stocks->map(function ($ws) {
+                return [
+                    'warehouse_id'   => $ws->warehouse_id,
+                    'warehouse_name' => $ws->warehouse?->name,
+                    'warehouse_type' => $ws->warehouse?->type,
+                    'qty_available'  => (float) $ws->qty_available,
+                    'qty_reserved'   => (float) $ws->qty_reserved,
+                ];
             });
 
-        return new MaterialCollection($query->paginate($perPage));
+            $isBelowRop = $totalAvailable <= (float) $material->reorder_point;
+            $isBelowSafety = $totalAvailable <= (float) $material->safety_stock;
+
+            $status = 'NORMAL';
+            if ($isBelowSafety) {
+                $status = 'CRITICAL';
+            } elseif ($isBelowRop) {
+                $status = 'WARNING';
+            }
+
+            return [
+                'id'                 => $material->id,
+                'sku'                => $material->sku,
+                'name'               => $material->name,
+                'category_id'        => $material->category_id,
+                'category_name'      => $material->category?->name,
+                'unit'               => $material->unit,
+                'safety_stock'       => (float) $material->safety_stock,
+                'reorder_point'      => (float) $material->reorder_point,
+                'total_available'    => $totalAvailable,
+                'total_reserved'     => $totalReserved,
+                'rop_status'         => $status,
+                'is_low_stock'       => $isBelowRop,
+                'brands'             => $material->brands,
+                'warehouse_stocks'   => $warehouseBreakdown,
+                'created_at'         => $material->created_at?->toIso8601String(),
+                'updated_at'         => $material->updated_at?->toIso8601String(),
+            ];
+        });
+
+        // Optional filter for low stock only
+        if ($request->boolean('low_stock_only') || $request->input('status') === 'rop') {
+            $data = $data->filter(fn ($item) => $item['is_low_stock'])->values();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Daftar data master material berhasil diambil',
+            'data'    => $data,
+            'meta'    => [
+                'total'     => $data->count(),
+                'low_stock' => $data->where('is_low_stock', true)->count(),
+            ],
+        ]);
     }
 
     /**
-     * Store a new material.
-     *
-     * Accepts:
-     *   sku, name, item_type, category_id, unit_id, unit,
-     *   safety_stock, reorder_point, supplier_id,
-     *   gramature, dimension, machine,
-     *   brand_ids: int[]
+     * Store a newly created material.
+     * POST /api/v1/materials
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'sku'           => ['required', 'string', 'max:50', 'unique:materials,sku'],
-            'name'          => ['required', 'string', 'max:150'],
-            'item_type'     => ['nullable', 'string', 'in:material,product,sparepart'],
-            'category_id'   => ['nullable', 'integer', 'exists:categories,id'],
-            'unit_id'       => ['nullable', 'integer', 'exists:units,id'],
-            'unit'          => ['nullable', 'string', 'max:20'],
-            'safety_stock'  => ['nullable', 'numeric', 'min:0'],
-            'reorder_point' => ['nullable', 'numeric', 'min:0'],
-            'supplier_id'   => ['nullable', 'integer', 'exists:suppliers,id'],
-            'gramature'     => ['nullable', 'integer', 'min:1'],
-            'dimension'     => ['nullable', 'string', 'max:50'],
-            'machine'       => ['nullable', 'string', 'max:100'],
-            'brand_ids'     => ['nullable', 'array'],
-            'brand_ids.*'   => ['integer', 'exists:brands,id'],
+            'sku'             => ['required', 'string', 'max:50', 'unique:materials,sku'],
+            'name'            => ['required', 'string', 'max:150'],
+            'category_id'     => ['required', 'integer', 'exists:categories,id'],
+            'unit'            => ['required', 'string', 'max:20'],
+            'safety_stock'    => ['nullable', 'numeric', 'min:0'],
+            'reorder_point'   => ['nullable', 'numeric', 'min:0'],
+            'brand_ids'       => ['nullable', 'array'],
+            'brand_ids.*'     => ['integer', 'exists:brands,id'],
+            'initial_stocks'  => ['nullable', 'array'],
+            'initial_stocks.*.warehouse_id' => ['required_with:initial_stocks', 'integer', 'exists:warehouses,id'],
+            'initial_stocks.*.qty_available' => ['required_with:initial_stocks', 'numeric', 'min:0'],
         ]);
 
-        $material = Material::create($validated);
-
-        if (! empty($validated['brand_ids'])) {
-            $material->brands()->sync($validated['brand_ids']);
-        }
-
-        $material->load(self::WITH);
-
-        return (new MaterialResource($material))
-            ->response()
-            ->setStatusCode(201);
-    }
-
-    /**
-     * Show a single material with full stock and batch detail.
-     */
-    public function show(Material $material): MaterialResource
-    {
-        $material->load(self::WITH);
-
-        return new MaterialResource($material);
-    }
-
-    /**
-     * Update material master data.
-     */
-    public function update(Request $request, Material $material): MaterialResource
-    {
-        $validated = $request->validate([
-            'sku'           => ['sometimes', 'string', 'max:50', "unique:materials,sku,{$material->id}"],
-            'name'          => ['sometimes', 'string', 'max:150'],
-            'item_type'     => ['sometimes', 'string', 'in:material,product,sparepart'],
-            'category_id'   => ['nullable', 'integer', 'exists:categories,id'],
-            'unit_id'       => ['nullable', 'integer', 'exists:units,id'],
-            'unit'          => ['sometimes', 'string', 'max:20'],
-            'safety_stock'  => ['nullable', 'numeric', 'min:0'],
-            'reorder_point' => ['nullable', 'numeric', 'min:0'],
-            'supplier_id'   => ['nullable', 'integer', 'exists:suppliers,id'],
-            'gramature'     => ['nullable', 'integer', 'min:1'],
-            'dimension'     => ['nullable', 'string', 'max:50'],
-            'machine'       => ['nullable', 'string', 'max:100'],
-            'brand_ids'     => ['nullable', 'array'],
-            'brand_ids.*'   => ['integer', 'exists:brands,id'],
-        ]);
-
-        $material->update($validated);
-
-        if (array_key_exists('brand_ids', $validated)) {
-            $material->brands()->sync($validated['brand_ids'] ?? []);
-        }
-
-        $material->load(self::WITH);
-
-        return new MaterialResource($material);
-    }
-
-    /**
-     * Delete a material (only allowed when all warehouse stocks are zero).
-     */
-    public function destroy(Material $material): JsonResponse
-    {
-        $hasStock = $material->warehouseStocks()->where('qty_available', '>', 0)->exists();
-
-        if ($hasStock) {
-            return response()->json([
-                'message' => 'Cannot delete material with active stock. Please transfer or adjust stock to zero first.',
-            ], 422);
-        }
-
-        $material->delete();
-
-        return response()->json(['message' => 'Material deleted successfully.']);
-    }
-
-    /**
-     * Return materials whose total stock ≤ reorder_point (ROP Alert engine).
-     *
-     * Query parameters:
-     *   warehouse_id – scope to a specific warehouse
-     *   item_type    – scope to a specific item kind
-     */
-    public function lowStock(Request $request): JsonResponse
-    {
-        $query = Material::with(self::WITH)
-            ->when($request->item_type, fn ($q) => $q->where('item_type', $request->item_type))
-            ->whereHas('warehouseStocks', function ($q) use ($request) {
-                $q->whereColumn('qty_available', '<=', 'materials.reorder_point');
-                if ($request->warehouse_id) {
-                    $q->where('warehouse_id', $request->warehouse_id);
-                }
-            });
-
-        $items = $query->get();
-
-        return response()->json([
-            'data'  => MaterialResource::collection($items),
-            'count' => $items->count(),
-        ]);
-    }
-
-    /**
-     * Stock mutation history for a specific material.
-     *
-     * Query parameters:
-     *   limit – max records to return (default 20, max 100)
-     */
-    public function movements(Material $material, Request $request): JsonResponse
-    {
-        $limit = min((int) ($request->limit ?? 20), 100);
-
-        $mutations = $material->stockMutations()
-            ->with(['createdBy:id,name', 'originWarehouse:id,name', 'targetWarehouse:id,name'])
-            ->latest()
-            ->limit($limit)
-            ->get()
-            ->map(fn ($m) => [
-                'id'          => (string) $m->id,
-                'type'        => $m->type,                          // IN/OUT/TRANSFER/ADJUSTMENT
-                'qty'         => (float) $m->qty,
-                'warehouse'   => 'g'.($m->origin_warehouse_id ?? $m->target_warehouse_id),
-                'toWarehouse' => $m->target_warehouse_id ? 'g'.$m->target_warehouse_id : null,
-                'reference'   => $m->reference_type.'#'.$m->reference_id,
-                'note'        => null,                              // reserved for future column
-                'user'        => $m->createdBy?->name ?? 'System',
-                'date'        => $m->created_at->toISOString(),
+        return DB::transaction(function () use ($validated) {
+            $material = Material::create([
+                'sku'           => strtoupper(trim($validated['sku'])),
+                'name'          => trim($validated['name']),
+                'category_id'   => $validated['category_id'],
+                'unit'          => $validated['unit'],
+                'safety_stock'  => $validated['safety_stock'] ?? 0.00,
+                'reorder_point' => $validated['reorder_point'] ?? 0.00,
             ]);
 
+            // Sync brands if provided
+            if (!empty($validated['brand_ids'])) {
+                $material->brands()->sync($validated['brand_ids']);
+            }
+
+            // Inisialisasi warehouse stock untuk setiap gudang
+            $warehouses = Warehouse::all();
+            $initialStockMap = collect($validated['initial_stocks'] ?? [])
+                ->keyBy('warehouse_id');
+
+            foreach ($warehouses as $wh) {
+                $initialQty = 0.00;
+                if ($initialStockMap->has($wh->id)) {
+                    $initialQty = (float) $initialStockMap->get($wh->id)['qty_available'];
+                }
+
+                WarehouseStock::create([
+                    'material_id'   => $material->id,
+                    'warehouse_id'  => $wh->id,
+                    'qty_available' => $initialQty,
+                    'qty_reserved'  => 0.00,
+                ]);
+            }
+
+            $material->load(['category', 'brands', 'warehouseStocks.warehouse']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Material baru berhasil ditambahkan',
+                'data'    => $material,
+            ], 201);
+        });
+    }
+
+    /**
+     * Display the specified material.
+     * GET /api/v1/materials/{id}
+     */
+    public function show(int $id): JsonResponse
+    {
+        $material = Material::with([
+            'category',
+            'brands',
+            'warehouseStocks.warehouse',
+            'batchLots',
+        ])->find($id);
+
+        if (!$material) {
+            return response()->json([
+                'success' => false,
+                'message' => "Material dengan ID {$id} tidak ditemukan",
+            ], 404);
+        }
+
         return response()->json([
-            'data'     => $mutations,
-            'material' => [
-                'id'   => (string) $material->id,
-                'code' => $material->sku,
-                'name' => $material->name,
-            ],
+            'success' => true,
+            'message' => 'Detail material berhasil diambil',
+            'data'    => $material,
         ]);
+    }
+
+    /**
+     * Update the specified material.
+     * PUT/PATCH /api/v1/materials/{id}
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $material = Material::find($id);
+
+        if (!$material) {
+            return response()->json([
+                'success' => false,
+                'message' => "Material dengan ID {$id} tidak ditemukan",
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'sku'           => ['sometimes', 'required', 'string', 'max:50', Rule::unique('materials', 'sku')->ignore($material->id)],
+            'name'          => ['sometimes', 'required', 'string', 'max:150'],
+            'category_id'   => ['sometimes', 'required', 'integer', 'exists:categories,id'],
+            'unit'          => ['sometimes', 'required', 'string', 'max:20'],
+            'safety_stock'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'reorder_point' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'brand_ids'     => ['nullable', 'array'],
+            'brand_ids.*'   => ['integer', 'exists:brands,id'],
+        ]);
+
+        return DB::transaction(function () use ($material, $validated) {
+            $material->update([
+                'sku'           => isset($validated['sku']) ? strtoupper(trim($validated['sku'])) : $material->sku,
+                'name'          => isset($validated['name']) ? trim($validated['name']) : $material->name,
+                'category_id'   => $validated['category_id'] ?? $material->category_id,
+                'unit'          => $validated['unit'] ?? $material->unit,
+                'safety_stock'  => array_key_exists('safety_stock', $validated) ? ($validated['safety_stock'] ?? 0.00) : $material->safety_stock,
+                'reorder_point' => array_key_exists('reorder_point', $validated) ? ($validated['reorder_point'] ?? 0.00) : $material->reorder_point,
+            ]);
+
+            if (array_key_exists('brand_ids', $validated)) {
+                $material->brands()->sync($validated['brand_ids'] ?? []);
+            }
+
+            $material->load(['category', 'brands', 'warehouseStocks.warehouse']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Material berhasil diperbarui',
+                'data'    => $material,
+            ]);
+        });
+    }
+
+    /**
+     * Remove the specified material.
+     * DELETE /api/v1/materials/{id}
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $material = Material::find($id);
+
+        if (!$material) {
+            return response()->json([
+                'success' => false,
+                'message' => "Material dengan ID {$id} tidak ditemukan",
+            ], 404);
+        }
+
+        // Cek apakah ada stok aktif > 0
+        $totalStock = $material->warehouseStocks()->sum('qty_available');
+        if ($totalStock > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Tidak dapat menghapus material yang masih memiliki stok fisik ({$totalStock} {$material->unit}). Lakukan penyesuaian stok terlebih dahulu.",
+                'error_code' => 'ACTIVE_STOCK_EXISTS',
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($material) {
+            $material->brands()->detach();
+            $material->warehouseStocks()->delete();
+            $material->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Material berhasil dihapus',
+            ]);
+        });
     }
 }

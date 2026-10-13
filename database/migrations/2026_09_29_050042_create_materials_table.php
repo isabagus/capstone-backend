@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('sku', 50)->unique();
             $table->string('name', 150);
-            $table->foreignId('unit_id')->nullable()->constrained('units')->nullOnDelete();
-            $table->string('unit', 20)->nullable(); // Plano, Rim, Lembar, Kg
+            $table->foreignId('category_id')->constrained('categories')->restrictOnDelete();
+            $table->string('unit', 20); // Plano, Rim, Lembar, Kg
             $table->decimal('safety_stock', 10, 2)->default(0.00);
             $table->decimal('reorder_point', 10, 2)->default(0.00);
             $table->timestamps();

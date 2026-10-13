@@ -4,13 +4,14 @@ namespace Database\Seeders;
 
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
+/**
+ * DatabaseSeeder - Orkestrasi semua seeder dalam urutan dependency yang benar.
+ */
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -19,19 +20,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             PermissionSeeder::class,
+            UserSeeder::class,
             MasterDataSeeder::class,
+            UnitSeeder::class,
         ]);
-
-        $ownerRole = Role::where('slug', 'owner')->first();
-
-        User::firstOrCreate(
-            ['email' => 'owner@example.com'],
-            [
-                'name' => 'Owner User',
-                'password' => 'password123',
-                'role_id' => $ownerRole?->id,
-                'is_active' => true,
-            ]
-        );
     }
 }

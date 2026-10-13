@@ -6,26 +6,40 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * TSK-S1-05: CheckPermission Middleware
+ * Memastikan user yang terautentikasi memiliki permission granular tertentu (via role).
+ * Penggunaan: ->middleware('permission:inventory.view')
+ */
 class CheckPermission
 {
     /**
-     * Verify the authenticated user has the required permission slug.
+     * Handle an incoming request.
      *
-     * Usage in route: ->middleware('permission:inventory:create')
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  string  ...$permissions  Daftar permission yang dibutuhkan
      */
-    public function handle(Request $request, Closure $next, string $permissionSlug): Response
+    public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
-        if (! $request->user()) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
+        $user = $request->user();
 
-        if (! $request->user()->hasPermission($permissionSlug)) {
+        if (! $user) {
             return response()->json([
-                'message' => 'Forbidden. You do not have the required permission.',
-                'required_permission' => $permissionSlug,
-            ], 403);
+                'message' => 'Unauthenticated.',
+            ], 401);
         }
 
-        return $next($request);
+        // Cek apakah user memiliki SALAH SATU dari permissions yang diminta
+        foreach ($permissions as $permission) {
+            if ($user->hasPermission($permission)) {
+                return $next($request);
+            }
+        }
+
+        return response()->json([
+            'message'  => 'Akses ditolak. Anda tidak memiliki permission untuk operasi ini.',
+            'required' => $permissions,
+            'role'     => $user->role?->name,
+        ], 403);
     }
 }
