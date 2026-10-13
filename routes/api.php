@@ -75,6 +75,7 @@ Route::prefix('v1')->group(function () {
         Route::get('materials', [MaterialController::class, 'index']);
         Route::get('materials/low-stock', [MaterialController::class, 'lowStock']);
         Route::get('materials/{material}', [MaterialController::class, 'show']);
+        Route::get('materials/{material}/movements', [MaterialController::class, 'movements']);
         Route::middleware('permission:inventory:create')->group(function () {
             Route::post('materials', [MaterialController::class, 'store']);
         });
