@@ -4,6 +4,10 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\MaterialController;
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\SparepartController;
+use App\Http\Controllers\Api\V1\StockMutationController;
+use App\Http\Controllers\Api\V1\StockOpnameController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\UnitConversionController;
@@ -37,6 +41,28 @@ $registerMasterRoutes = function () {
     Route::get('inventory/alerts/rop', function (Request $request, MaterialController $controller) {
         $request->merge(['low_stock_only' => true]);
         return $controller->index($request);
+    });
+
+    // Spareparts CRUD (INV-03 / TSK-GDG-06)
+    Route::apiResource('spareparts', SparepartController::class);
+    Route::get('inventory/spareparts', [SparepartController::class, 'index']);
+
+    // Products CRUD (INV-02 / TSK-GDG-07)
+    Route::apiResource('products', ProductController::class);
+    Route::get('inventory/products', [ProductController::class, 'index']);
+
+    // Stock Opname Reconciliation (INV-04 / TSK-GDG-08)
+    Route::apiResource('stock-opnames', StockOpnameController::class);
+    Route::post('stock-opnames/{id}/count', [StockOpnameController::class, 'updateCounts']);
+    Route::post('stock-opnames/{id}/reconcile', [StockOpnameController::class, 'reconcile']);
+
+    // Stock Mutations & ACID Operations (TSK-GDG-04)
+    Route::prefix('inventory')->group(function () {
+        Route::get('movements', [StockMutationController::class, 'index']);
+        Route::post('in', [StockMutationController::class, 'stockIn']);
+        Route::post('out', [StockMutationController::class, 'stockOut']);
+        Route::post('transfer', [StockMutationController::class, 'transfer']);
+        Route::post('opname', [StockMutationController::class, 'stockOpname']);
     });
 
     // Warehouses CRUD
