@@ -5,7 +5,7 @@
 
 services:
   sip-backend:
-    container_name: sip-inventory-backend
+    container_name: erp-backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -34,7 +34,7 @@ services:
       - sip-net
 
   sip-frontend:
-    container_name: sip-inventory-frontend
+    container_name: erp-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
