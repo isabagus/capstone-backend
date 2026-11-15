@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\MaterialController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\SparepartController;
+use App\Http\Controllers\Api\V1\SpkController;
 use App\Http\Controllers\Api\V1\StockMutationController;
 use App\Http\Controllers\Api\V1\StockOpnameController;
 use App\Http\Controllers\Api\V1\SupplierController;
@@ -60,6 +61,10 @@ $registerMasterRoutes = function () {
     // Bill of Materials (BOM Engine - TSK-DSN-02)
     Route::post('bom/calculate', [BomController::class, 'calculate']);
     Route::apiResource('bom', BomController::class);
+
+    // Surat Perintah Kerja Digital (MOD-04 / TSK-DSN-03)
+    Route::patch('spk/{id}/status', [SpkController::class, 'updateStatus']);
+    Route::apiResource('spk', SpkController::class);
 
     // Stock Mutations & ACID Operations (TSK-GDG-04)
     Route::prefix('inventory')->group(function () {
