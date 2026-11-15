@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BomController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\MaterialController;
@@ -55,6 +56,10 @@ $registerMasterRoutes = function () {
     Route::apiResource('stock-opnames', StockOpnameController::class);
     Route::post('stock-opnames/{id}/count', [StockOpnameController::class, 'updateCounts']);
     Route::post('stock-opnames/{id}/reconcile', [StockOpnameController::class, 'reconcile']);
+
+    // Bill of Materials (BOM Engine - TSK-DSN-02)
+    Route::post('bom/calculate', [BomController::class, 'calculate']);
+    Route::apiResource('bom', BomController::class);
 
     // Stock Mutations & ACID Operations (TSK-GDG-04)
     Route::prefix('inventory')->group(function () {

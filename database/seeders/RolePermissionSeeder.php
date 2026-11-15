@@ -70,14 +70,22 @@ class RolePermissionSeeder extends Seeder
         // 2. Buat Permissions per Modul
         // ================================================================
         $permissions = [
-            // MOD-01: Inventori Multi-Gudang
-            ['name' => 'inventory.view',     'display_name' => 'Lihat Inventori',         'module' => 'MOD-01'],
-            ['name' => 'inventory.create',   'display_name' => 'Tambah Material',          'module' => 'MOD-01'],
-            ['name' => 'inventory.update',   'display_name' => 'Edit Material',            'module' => 'MOD-01'],
-            ['name' => 'inventory.delete',   'display_name' => 'Hapus Material',           'module' => 'MOD-01'],
-            ['name' => 'stock.transfer',     'display_name' => 'Transfer Stok Antar Gudang','module' => 'MOD-01'],
-            ['name' => 'stock.opname',       'display_name' => 'Stock Opname',             'module' => 'MOD-01'],
-            ['name' => 'batch.track',        'display_name' => 'Pelacakan Batch/Lot',      'module' => 'MOD-01'],
+            // MOD-01: Inventori Multi-Gudang & Master Data
+            ['name' => 'inventory.view',          'display_name' => 'Lihat Inventori',          'module' => 'MOD-01'],
+            ['name' => 'inventory.create',        'display_name' => 'Tambah Material',           'module' => 'MOD-01'],
+            ['name' => 'inventory.update',        'display_name' => 'Edit Material',             'module' => 'MOD-01'],
+            ['name' => 'inventory.delete',        'display_name' => 'Hapus Material',            'module' => 'MOD-01'],
+            ['name' => 'inventory.materials.view','display_name' => 'Lihat Bahan Baku',          'module' => 'MOD-01'],
+            ['name' => 'inventory.spareparts.view','display_name'=> 'Lihat Sparepart Mesin',     'module' => 'MOD-01'],
+            ['name' => 'inventory.products.view', 'display_name' => 'Lihat Produk Jadi',         'module' => 'MOD-01'],
+            ['name' => 'master.suppliers.view',   'display_name' => 'Kelola Master Supplier',    'module' => 'MOD-01'],
+            ['name' => 'master.brands.view',      'display_name' => 'Kelola Master Brand',       'module' => 'MOD-01'],
+            ['name' => 'master.warehouses.view',  'display_name' => 'Kelola Master Gudang',      'module' => 'MOD-01'],
+            ['name' => 'master.units.view',       'display_name' => 'Kelola Master Satuan & BOM','module' => 'MOD-01'],
+            ['name' => 'master.categories.view',  'display_name' => 'Kelola Master Kategori',    'module' => 'MOD-01'],
+            ['name' => 'stock.transfer',          'display_name' => 'Transfer Stok Antar Gudang','module' => 'MOD-01'],
+            ['name' => 'stock.opname',            'display_name' => 'Stock Opname',              'module' => 'MOD-01'],
+            ['name' => 'batch.track',             'display_name' => 'Pelacakan Batch/Lot',       'module' => 'MOD-01'],
 
             // MOD-02: Front Office & Input Order
             ['name' => 'order.view',         'display_name' => 'Lihat Order',              'module' => 'MOD-02'],
@@ -140,20 +148,9 @@ class RolePermissionSeeder extends Seeder
             collect($permModels)->pluck('id')->toArray()
         );
 
-        // MANAGER - Approval, laporan, kurs USD, inventori view, produksi view
+        // MANAGER - Akses penuh seluruh Master Data, Inventori, Laporan, Dashboard & seluruh modul operasional
         $roleModels['manager']->permissions()->sync(
-            collect($permModels)->only([
-                'inventory.view', 'stock.transfer', 'stock.opname',
-                'order.view', 'order.approve', 'order.update',
-                'bom.view', 'spk.view', 'spk.download',
-                'production.view', 'qc.inspect',
-                'rop.view', 'rop.manage',
-                'usd.view', 'usd.manage',
-                'invoice.view', 'invoice.download',
-                'report.view', 'report.export',
-                'audit.view',
-                'user.view',
-            ])->pluck('id')->toArray()
+            collect($permModels)->pluck('id')->toArray()
         );
 
         // FRONT OFFICE - Input order dan lihat stok
