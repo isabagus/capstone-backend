@@ -12,8 +12,18 @@ class StockOpname extends Model
         'opname_code',
         'warehouse_id',
         'status',
+        'notes',
+        'approved_by',
+        'completed_at',
         'created_by',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'completed_at' => 'datetime',
+        ];
+    }
 
     /**
      * @return BelongsTo<Warehouse, $this>
@@ -29,6 +39,14 @@ class StockOpname extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     /**

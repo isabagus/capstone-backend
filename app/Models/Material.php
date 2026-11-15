@@ -13,7 +13,12 @@ class Material extends Model
         'sku',
         'name',
         'category_id',
+        'supplier_id',
         'unit',
+        'gramature',
+        'dimension',
+        'batch_no',
+        'expiry_date',
         'safety_stock',
         'reorder_point',
     ];
@@ -21,8 +26,10 @@ class Material extends Model
     protected function casts(): array
     {
         return [
+            'gramature' => 'decimal:2',
             'safety_stock' => 'decimal:2',
             'reorder_point' => 'decimal:2',
+            'expiry_date' => 'date',
         ];
     }
 
@@ -32,6 +39,14 @@ class Material extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @return BelongsTo<Supplier, $this>
+     */
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     /**
